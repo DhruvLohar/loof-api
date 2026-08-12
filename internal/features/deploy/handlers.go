@@ -22,9 +22,6 @@ type pushPayload struct {
 		ID      string `json:"id"`
 		Message string `json:"message"`
 	} `json:"head_commit"`
-	Repository struct {
-		FullName string `json:"full_name"`
-	} `json:"repository"`
 	Pusher struct {
 		Name string `json:"name"`
 	} `json:"pusher"`
@@ -73,13 +70,6 @@ func HandleGithubWebhook(deployer *Deployer) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"success": false,
 				"message": "invalid push payload",
-			})
-		}
-
-		if cfg.Repository != "" && !strings.EqualFold(cfg.Repository, payload.Repository.FullName) {
-			return c.Status(fiber.StatusOK).JSON(fiber.Map{
-				"success": true,
-				"message": "ignored repository: " + payload.Repository.FullName,
 			})
 		}
 

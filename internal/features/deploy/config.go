@@ -13,7 +13,6 @@ import (
 type Config struct {
 	Secret     string        // GITHUB_WEBHOOK_SECRET, shared with GitHub
 	Branch     string        // DEPLOY_BRANCH, only pushes to this branch deploy
-	Repository string        // DEPLOY_REPOSITORY, optional "owner/name" allowlist
 	ScriptPath string        // DEPLOY_SCRIPT, the shell script that rebuilds and restarts
 	Timeout    time.Duration // DEPLOY_TIMEOUT_MINUTES, hard limit on a deploy run
 }
@@ -39,7 +38,6 @@ func LoadConfig() Config {
 	return Config{
 		Secret:     strings.TrimSpace(config.GetEnv("GITHUB_WEBHOOK_SECRET")),
 		Branch:     branch,
-		Repository: strings.TrimSpace(config.GetEnv("DEPLOY_REPOSITORY")),
 		ScriptPath: script,
 		Timeout:    timeout,
 	}
