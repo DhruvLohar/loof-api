@@ -20,7 +20,7 @@ IMAGE_NAME=${IMAGE_NAME:-loof-api}
 CONTAINER_NAME=${CONTAINER_NAME:-loof-api}
 HOST_PORT=${HOST_PORT:-8000}
 APP_PORT=${APP_PORT:-8000}
-ENV_FILE=${ENV_FILE:-$HOST_REPO_DIR/.env}
+ENV_FILE=${ENV_FILE:-$HOST_REPO_DIR/.env.prod}
 SWAP_IMAGE=${SWAP_IMAGE:-docker:cli}
 
 log() { echo "[deploy.sh] $*"; }
