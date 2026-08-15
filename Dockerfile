@@ -13,7 +13,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/api
 
 # deploy.sh runs migrations before swapping containers, so goose ships in the
 # runtime image. Pinned so a deploy can't pick up a breaking release on its own.
-RUN CGO_ENABLED=0 GOOS=linux go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
+#
+# The no_* tags drop every driver except postgres. Stock goose blank-imports all
+# of them, which drags in clickhouse, ydb, vertica, mssql and a cgo-free sqlite
+# -- hundreds of packages we never call, and enough build output to fill a small
+# EC2 root volume mid-build.
+RUN CGO_ENABLED=0 GOOS=linux go install \
+	-tags='no_clickhouse no_mssql no_mysql no_sqlite3 no_turso no_vertica no_ydb' \
+	github.com/pressly/goose/v3/cmd/goose@v3.27.3
 
 # --- Stage 2: Final Runtime ---
 FROM alpine:latest

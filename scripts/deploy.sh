@@ -23,6 +23,7 @@ APP_PORT=${APP_PORT:-8000}
 ENV_FILE=${ENV_FILE:-$HOST_REPO_DIR/.env.prod}
 SWAP_IMAGE=${SWAP_IMAGE:-docker:cli}
 RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
+BUILDER_IMAGE=${BUILDER_IMAGE:-golang:1.26-alpine}
 
 log() { echo "[deploy.sh] $*"; }
 
@@ -45,6 +46,45 @@ git reset --hard "origin/$BRANCH"
 git clean -fd
 
 TAG=$(git rev-parse --short HEAD)
+
+free_space() { df -Ph / 2>/dev/null | awk 'NR==2 {print $4" free, "$5" used"}'; }
+
+sweep() {
+	# Images backing a running container must survive: one of them is the image
+	# this very script is executing inside of. Docker refuses to remove those
+	# anyway, but skipping them keeps the log free of expected failures.
+	in_use=""
+	for c in $(docker ps -q 2>/dev/null); do
+		in_use="$in_use $(docker inspect --format '{{.Image}}' "$c" 2>/dev/null || true)"
+	done
+
+	# Stopped containers first: they hold image references that would otherwise
+	# block the image sweep below.
+	docker container prune -f >/dev/null 2>&1 || true
+
+	docker images --no-trunc --format '{{.ID}}|{{.Repository}}:{{.Tag}}' 2>/dev/null |
+		while IFS='|' read -r id ref; do
+			case "$ref" in
+				"$IMAGE_NAME":latest | "$BUILDER_IMAGE") continue ;;
+			esac
+			case "$in_use" in
+				*"$id"*) continue ;;
+			esac
+			# Untagged builder stages, superseded $IMAGE_NAME:<sha> tags, and any
+			# one-off image someone pulled by hand.
+			docker rmi -f "$id" >/dev/null 2>&1 || true
+		done
+
+	docker builder prune -af >/dev/null 2>&1 || true
+	docker network prune -f >/dev/null 2>&1 || true
+	# Unused volumes only; nothing here mounts one, the DB is external.
+	docker volume prune -f >/dev/null 2>&1 || true
+}
+
+log "sweeping docker before build ($(free_space))"
+sweep
+log "swept, keeping $BUILDER_IMAGE + $IMAGE_NAME ($(free_space))"
+
 log "building $IMAGE_NAME:$TAG"
 docker build -t "$IMAGE_NAME:$TAG" -t "$IMAGE_NAME:latest" "$REPO_DIR"
 
@@ -90,6 +130,9 @@ RUN_CMD="docker run -d \
 	-e APP_PORT=$APP_PORT \
 	$IMAGE_NAME:$TAG"
 
+log "pulling $SWAP_IMAGE for the swap"
+docker pull "$SWAP_IMAGE" >/dev/null
+
 log "handing container swap to helper"
 docker run -d --rm \
 	--name "${CONTAINER_NAME}-swap" \
@@ -106,7 +149,7 @@ docker run -d --rm \
 			-e HOST_REPO_DIR=$HOST_REPO_DIR \
 			$IMAGE_NAME:latest >>$HOST_REPO_DIR/deploy.log 2>&1"
 
-# Old images pile up fast on a small EC2 disk.
+
 docker image prune -f >/dev/null 2>&1 || true
 
 log "done, $IMAGE_NAME:$TAG will be live in a few seconds"
