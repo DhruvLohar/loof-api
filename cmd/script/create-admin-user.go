@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,16 +11,39 @@ import (
 	"loof/internal/database"
 	"loof/internal/features/admins"
 
+	"github.com/joho/godotenv"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
+	prod := flag.Bool("prod", false, "create the admin user on the production database (loads .env.prod)")
+	flag.Parse()
+
+	reader := bufio.NewReader(os.Stdin)
+
+	if *prod {
+		// database.ConnectDatabase() reads vars via config.GetEnv, which loads
+		// ".env" but never overrides vars already set in the environment — so
+		// loading .env.prod here first makes it win over the local .env.
+		if err := godotenv.Load(".env.prod"); err != nil {
+			log.Fatalf("Error loading .env.prod: %v", err)
+		}
+
+		fmt.Println("WARNING: this will create an admin user on PRODUCTION.")
+		fmt.Print("Type 'yes' to continue: ")
+		confirm, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatalf("Error reading confirmation: %v", err)
+		}
+		if strings.TrimSpace(confirm) != "yes" {
+			log.Fatal("Aborted.")
+		}
+	}
+
 	// Initialize Database
 	database.ConnectDatabase()
 	log.Println("Database connection established successfully.")
-
-	reader := bufio.NewReader(os.Stdin)
 
 	// Read Name
 	fmt.Print("Enter Admin Name: ")
