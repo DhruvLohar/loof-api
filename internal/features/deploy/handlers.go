@@ -94,7 +94,7 @@ func HandleGithubWebhook(deployer *Deployer) fiber.Handler {
 		if err := deployer.Trigger(commit); err != nil {
 			return c.Status(fiber.StatusOK).JSON(fiber.Map{
 				"success": true,
-				"message": err.Error() + ", it will pick up this commit",
+				"message": err.Error() + ", commit queued and will deploy once the current run finishes",
 				"commit":  commit,
 			})
 		}

@@ -29,6 +29,7 @@ help:
 	@echo "  make lint         - Run linter"
 	@echo "  make test         - Run tests"
 	@echo "  make create-admin - Create an admin user interactively"
+	@echo "  (append prod=1 to target production, e.g. make create-admin prod=1)"
 	@echo "  make clean        - Remove compiled binary"
 	@echo ""
 	@echo "  make migrate-up      - Apply pending migrations"
@@ -62,7 +63,7 @@ test:
 	go test -v ./...
 
 create-admin:
-	@go run cmd/script/create-admin-user.go
+	@go run cmd/script/create-admin-user.go $(if $(filter 1 true,$(prod)),-prod)
 
 migrate-up:
 	@test -f ./$(ENV_FILE) || (echo "$(ENV_FILE) not found" && exit 1)

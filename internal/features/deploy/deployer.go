@@ -10,9 +10,11 @@ import (
 	"time"
 )
 
-// ErrDeployInProgress is returned when a deploy is already running. Pushes that
-// land mid-deploy are dropped rather than queued: the running deploy always
-// checks out the tip of the branch, so it picks up the newer commit anyway.
+// ErrDeployInProgress is returned when a deploy is already running. The
+// triggering commit is queued rather than dropped: deploy.sh fetches and
+// resets to the branch tip at the *start* of a run, so a commit pushed while
+// that run is already building would otherwise never get built. Whatever the
+// latest commit is when the current run finishes gets deployed next.
 var ErrDeployInProgress = errors.New("a deploy is already in progress")
 
 type Deployer struct {
@@ -20,6 +22,7 @@ type Deployer struct {
 
 	mu       sync.Mutex
 	running  bool
+	pending  string // latest commit queued while a deploy is running; empty when none
 	lastRun  time.Time
 	lastSHA  string
 	lastErr  error
@@ -33,6 +36,7 @@ func NewDeployer(cfg Config) *Deployer {
 // Status is a snapshot of the most recent deploy, safe to read concurrently.
 type Status struct {
 	Running     bool      `json:"running"`
+	Pending     string    `json:"pending_commit,omitempty"`
 	LastRunAt   time.Time `json:"last_run_at"`
 	LastCommit  string    `json:"last_commit"`
 	LastError   string    `json:"last_error,omitempty"`
@@ -48,6 +52,7 @@ func (d *Deployer) Status() Status {
 
 	status := Status{
 		Running:     d.running,
+		Pending:     d.pending,
 		LastRunAt:   d.lastRun,
 		LastCommit:  d.lastSHA,
 		LastOutput:  d.lastLogs,
@@ -61,15 +66,19 @@ func (d *Deployer) Status() Status {
 	return status
 }
 
-// Trigger starts a deploy in the background. It returns ErrDeployInProgress if
-// one is already running so the webhook can answer GitHub immediately either way.
+// Trigger starts a deploy in the background. If one is already running, it
+// queues commitSHA (overwriting any earlier queued commit) and returns
+// ErrDeployInProgress so the webhook can answer GitHub immediately either way;
+// the queued commit is deployed automatically once the current run finishes.
 func (d *Deployer) Trigger(commitSHA string) error {
 	d.mu.Lock()
 	if d.running {
+		d.pending = commitSHA
 		d.mu.Unlock()
 		return ErrDeployInProgress
 	}
 	d.running = true
+	d.pending = ""
 	d.lastRun = time.Now().UTC()
 	d.lastSHA = commitSHA
 	d.lastErr = nil
@@ -110,7 +119,16 @@ func (d *Deployer) run(commitSHA string) {
 	d.running = false
 	d.lastErr = err
 	d.lastLogs = tail(string(output), 8000)
+	next := d.pending
+	d.pending = ""
 	d.mu.Unlock()
+
+	if next != "" {
+		log.Printf("[deploy] commit %s landed while deploying %s, starting it now", next, commitSHA)
+		if triggerErr := d.Trigger(next); triggerErr != nil {
+			log.Printf("[deploy] failed to start queued deploy for %s: %v", next, triggerErr)
+		}
+	}
 }
 
 // tail keeps the last n bytes of the script output, which is where failures show up.
