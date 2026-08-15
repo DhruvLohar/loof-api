@@ -19,8 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go install github.com/pressly/goose/v3/cmd/goose@v3
 FROM alpine:latest
 
 # git and docker-cli are what the deploy webhook shells out to: it pulls the
-# repo and rebuilds this image against the host docker socket.
-RUN apk --no-cache add ca-certificates git docker-cli
+# repo and rebuilds this image against the host docker socket. tzdata backs the
+# TimeZone in the database DSN, which alpine has no zoneinfo for otherwise.
+RUN apk --no-cache add ca-certificates git docker-cli tzdata
 
 WORKDIR /root/
 
