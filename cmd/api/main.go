@@ -37,7 +37,12 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	app.Use(session.New())
+	isProduction := config.GetEnv("APP_ENV") == "production"
+	app.Use(session.New(session.Config{
+		CookieHTTPOnly: true,
+		CookieSecure:   isProduction,
+		CookieSameSite: "Lax",
+	}))
 
 	app.Get("/health", healthCheck)
 	shared.RegisterRoutes(app,
