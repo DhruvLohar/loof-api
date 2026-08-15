@@ -270,8 +270,9 @@ func UpdatePreferences(c fiber.Ctx) error {
 
 // UpdateProfile applies a multipart/form-data profile edit.
 // Text fields (name, username, gender, dob, country) are optional and only
-// updated when present; profile_picture (single file) and cover_images (one or
-// more files) are uploaded to S3 and stored as URLs.
+// updated when present; interests is a text[] column sent as repeated fields
+// or a JSON array and replaces the stored list; profile_picture (single file)
+// and cover_images (one or more files) are uploaded to S3 and stored as URLs.
 func UpdateProfile(c fiber.Ctx) error {
 	authUserID, err := shared.GetAuthenticatedUserID(c)
 	if err != nil {
@@ -337,6 +338,17 @@ func UpdateProfile(c fiber.Ctx) error {
 	}
 
 	if form, err := c.MultipartForm(); err == nil && form != nil {
+		if values, ok := shared.MultipartValues(form, "interests"); ok {
+			interests, err := shared.ParseStringArrayField(values)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"success": false,
+					"message": "invalid interests, expected repeated text fields or a JSON array of strings",
+				})
+			}
+			updates["interests"] = interests
+		}
+
 		if files := form.File["cover_images"]; len(files) > 0 {
 			coverImageURLs := make([]string, 0, len(files))
 			for _, fileHeader := range files {

@@ -7,7 +7,7 @@ func RegisterUserRoutes(router fiber.Router, protectedMiddleware fiber.Handler) 
 
 	// Auth Routes
 	usersGroup.Post("/signup-signin", SignUpSignIn)
-	usersGroup.Post("/send-otp", SendOTP)
+	usersGroup.Post("/resend-otp", SendOTP)
 	usersGroup.Post("/verify-otp", VerifyOTP)
 
 	// Profile Routes
