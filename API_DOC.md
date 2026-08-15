@@ -4,6 +4,27 @@ Base URL prefix: `/v1`
 
 ---
 
+## Authentication
+
+User endpoints marked **Protected** require the JWT returned by `/v1/users/verify-otp`, sent as a bearer token:
+
+```
+Authorization: Bearer <access_token>
+```
+
+The scheme is matched case-insensitively. A missing header, a non-`Bearer` scheme, an empty token, or an invalid/expired token all return:
+
+```json
+{
+  "success": false,
+  "message": "unauthorized"
+}
+```
+
+with status `401`. Tokens are signed with HS256 and expire 24 hours after issue; call `/v1/users/verify-otp` again to get a new one. Cookies/sessions are not used for user authentication.
+
+---
+
 ## Users
 
 ### POST `/v1/users/signup-signin`
@@ -28,6 +49,8 @@ Base URL prefix: `/v1`
 }
 ```
 
+`id` is the user identifier used by every other user endpoint (`resend-otp`, `verify-otp`).
+
 ---
 
 ### POST `/v1/users/resend-otp`
@@ -35,7 +58,7 @@ Base URL prefix: `/v1`
 **Request Payload**
 ```json
 {
-  "uid": "uint"
+  "id": "uint"
 }
 ```
 
@@ -54,7 +77,7 @@ Base URL prefix: `/v1`
 **Request Payload**
 ```json
 {
-  "uid": "uint",
+  "id": "uint",
   "otp": "int"
 }
 ```
@@ -75,9 +98,13 @@ Base URL prefix: `/v1`
 }
 ```
 
+Store `access_token` and send it as `Authorization: Bearer <access_token>` on every protected endpoint.
+
 ---
 
 ### POST `/v1/users/validate-username`
+
+**Auth:** Protected
 
 **Request Payload**
 ```json
@@ -97,6 +124,8 @@ Base URL prefix: `/v1`
 ---
 
 ### POST `/v1/users/preferences`
+
+**Auth:** Protected
 
 **Request Payload**
 ```json
@@ -119,6 +148,8 @@ Base URL prefix: `/v1`
 ---
 
 ### GET `/v1/users/profile`
+
+**Auth:** Protected
 
 **Request Payload**
 None
@@ -151,6 +182,8 @@ None
 ---
 
 ### POST `/v1/users/profile`
+
+**Auth:** Protected
 
 **Request Payload**
 `multipart/form-data`, all fields optional — only the ones sent are updated.

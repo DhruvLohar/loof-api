@@ -49,11 +49,11 @@ type SignUpSignInRequest struct {
 }
 
 type SendOTPRequest struct {
-	UID uint `json:"uid"`
+	ID uint `json:"id"`
 }
 
 type VerifyOTPRequest struct {
-	UID uint `json:"uid"`
+	ID  uint `json:"id"`
 	OTP int  `json:"otp"`
 }
 

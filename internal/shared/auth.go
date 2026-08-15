@@ -2,19 +2,28 @@ package shared
 
 import (
 	"errors"
+	"strings"
 
 	"loof/internal/config"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/session"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func GetAuthenticatedUserID(c fiber.Ctx) (uint, error) {
-	sess := session.FromContext(c)
-	token := sess.Get("__loof_session")
-	if token == nil {
+	authHeader := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
+	if authHeader == "" {
+		return 0, errors.New("unauthorized")
+	}
+
+	scheme, tokenValue, found := strings.Cut(authHeader, " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return 0, errors.New("unauthorized")
+	}
+
+	tokenValue = strings.TrimSpace(tokenValue)
+	if tokenValue == "" {
 		return 0, errors.New("unauthorized")
 	}
 
@@ -24,7 +33,7 @@ func GetAuthenticatedUserID(c fiber.Ctx) (uint, error) {
 	}
 
 	claims := jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(token.(string), claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(tokenValue, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secretKey), nil
 	})
 	if err != nil {

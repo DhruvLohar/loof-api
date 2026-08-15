@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/session"
 	"github.com/lib/pq"
 )
 
@@ -56,14 +55,14 @@ func SendOTP(c fiber.Ctx) error {
 		})
 	}
 
-	if req.UID == 0 {
+	if req.ID == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
-			"message": "uid is required",
+			"message": "id is required",
 		})
 	}
 
-	if err := UpdateOTP(req.UID, staticOTP); err != nil {
+	if err := UpdateOTP(req.ID, staticOTP); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "failed to save OTP",
@@ -86,14 +85,14 @@ func VerifyOTP(c fiber.Ctx) error {
 		})
 	}
 
-	if req.UID == 0 || req.OTP == 0 {
+	if req.ID == 0 || req.OTP == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
-			"message": "uid and otp are required",
+			"message": "id and otp are required",
 		})
 	}
 
-	user, err := GetUser(req.UID)
+	user, err := GetUser(req.ID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"success": false,
@@ -127,9 +126,6 @@ func VerifyOTP(c fiber.Ctx) error {
 			"message": "failed to complete login",
 		})
 	}
-
-	sess := session.FromContext(c)
-	sess.Set("__loof_session", accessToken)
 
 	return c.JSON(fiber.Map{
 		"success": true,
