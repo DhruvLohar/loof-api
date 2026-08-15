@@ -6,35 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
-
-type User struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	Name        string `json:"name"`
-	Username    *string `gorm:"uniqueIndex;type:varchar(30)" json:"username"`
-	CountryCode string `gorm:"type:varchar(10);not null" json:"country_code"`
-	PhoneNumber string `gorm:"uniqueIndex;type:varchar(20);not null" json:"phone_number"`
-	Gender      string `gorm:"type:varchar(10)" json:"gender"`
-
-	DOB            *time.Time `gorm:"type:date" json:"dob"`
-	Country        string     `gorm:"type:varchar(100)" json:"country"`
-	ProfilePicture string     `json:"profile_picture"`
-
-	Interests   pq.StringArray `gorm:"type:text[]" json:"interests"`
-	Preferences datatypes.JSON `gorm:"type:jsonb" json:"preferences"`
-
-	AccessToken    string     `json:"access_token"`
-	OTPGenerated   int        `json:"otp_generated"`
-	OTPGeneratedAt *time.Time `json:"otp_generated_at"`
-
-	IsActive    bool       `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
-	LastLoginAt *time.Time `json:"last_login_at"`
-}
 
 // GetUser fetches a user by primary key ID
 func GetUser(id uint) (*User, error) {
@@ -79,14 +52,6 @@ func UpdateOTP(userID uint, otp int) error {
 		"otp_generated":    otp,
 		"otp_generated_at": now,
 	}).Error
-}
-
-// ListUsersParams defines filtering and pagination options for admin user listing
-type ListUsersParams struct {
-	Page     int
-	PageSize int
-	Status   string // "active", "inactive", or "" for all
-	Search   string // matches id, name, username or phone_number
 }
 
 // ListUsers returns a paginated, filtered set of users along with the total matching count

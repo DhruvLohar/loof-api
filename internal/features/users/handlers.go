@@ -3,34 +3,18 @@ package users
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"loof/internal/database"
 	"loof/internal/shared"
+	"loof/internal/storage"
 	"math/big"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/session"
+	"github.com/lib/pq"
 )
-
-// Request Payload Structs
-type SignUpSignInRequest struct {
-	CountryCode string `json:"country_code"`
-	PhoneNumber string `json:"phone_number"`
-}
-
-type SendOTPRequest struct {
-	UID uint `json:"uid"`
-}
-
-type VerifyOTPRequest struct {
-	UID uint `json:"uid"`
-	OTP int  `json:"otp"`
-}
-
-type ValidateUsernameRequest struct {
-	Username string `json:"username"`
-}
 
 // --- Auth Handlers ---
 
@@ -281,6 +265,120 @@ func UpdatePreferences(c fiber.Ctx) error {
 		"success": true,
 		"message": "preferences updated successfully",
 		"data":    mergedPreferences,
+	})
+}
+
+// UpdateProfile applies a multipart/form-data profile edit.
+// Text fields (name, username, gender, dob, country) are optional and only
+// updated when present; profile_picture (single file) and cover_images (one or
+// more files) are uploaded to S3 and stored as URLs.
+func UpdateProfile(c fiber.Ctx) error {
+	authUserID, err := shared.GetAuthenticatedUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "unauthorized",
+		})
+	}
+
+	updates := map[string]any{}
+
+	if name := strings.TrimSpace(c.FormValue("name")); name != "" {
+		updates["name"] = name
+	}
+
+	if username := strings.TrimSpace(c.FormValue("username")); username != "" {
+		var count int64
+		if err := database.DB.Db.Model(&User{}).
+			Where("username = ? AND id <> ?", username, authUserID).
+			Count(&count).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"message": "failed to validate username",
+			})
+		}
+		if count > 0 {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"success": false,
+				"message": "username already exists",
+			})
+		}
+		updates["username"] = username
+	}
+
+	if gender := strings.TrimSpace(c.FormValue("gender")); gender != "" {
+		updates["gender"] = gender
+	}
+
+	if country := strings.TrimSpace(c.FormValue("country")); country != "" {
+		updates["country"] = country
+	}
+
+	if dob := strings.TrimSpace(c.FormValue("dob")); dob != "" {
+		parsedDOB, err := time.Parse("2006-01-02", dob)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "invalid dob format, expected YYYY-MM-DD",
+			})
+		}
+		updates["dob"] = parsedDOB
+	}
+
+	if fileHeader, err := c.FormFile("profile_picture"); err == nil && fileHeader != nil {
+		url, err := storage.UploadImage(c.Context(), fileHeader, fmt.Sprintf("users/%d/profile-picture", authUserID))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": err.Error(),
+			})
+		}
+		updates["profile_picture"] = url
+	}
+
+	if form, err := c.MultipartForm(); err == nil && form != nil {
+		if files := form.File["cover_images"]; len(files) > 0 {
+			coverImageURLs := make([]string, 0, len(files))
+			for _, fileHeader := range files {
+				url, err := storage.UploadImage(c.Context(), fileHeader, fmt.Sprintf("users/%d/cover-images", authUserID))
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+						"success": false,
+						"message": err.Error(),
+					})
+				}
+				coverImageURLs = append(coverImageURLs, url)
+			}
+			updates["cover_images"] = pq.StringArray(coverImageURLs)
+		}
+	}
+
+	if len(updates) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "no fields to update",
+		})
+	}
+
+	if err := database.DB.Db.Model(&User{}).Where("id = ?", authUserID).Updates(updates).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "failed to update profile",
+		})
+	}
+
+	user, err := GetUser(authUserID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"message": "user not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "profile updated successfully",
+		"data":    SerializeUserProfile(user),
 	})
 }
 

@@ -13,6 +13,7 @@ var profileResponseFields = []string{
 	"country",
 	"profile_picture",
 	"interests",
+	"cover_images",
 	"preferences",
 	"is_active",
 	"created_at",
@@ -45,6 +46,8 @@ func SerializeUserProfile(user *User) fiber.Map {
 			data["profile_picture"] = user.ProfilePicture
 		case "interests":
 			data["interests"] = user.Interests
+		case "cover_images":
+			data["cover_images"] = user.CoverImages
 		case "preferences":
 			data["preferences"] = user.Preferences
 		case "is_active":
