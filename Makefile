@@ -1,5 +1,5 @@
 .PHONY: build run dev fmt lint test help create-admin \
-	migrate-up migrate-down migrate-status migrate-create
+	migrate-up migrate-down migrate-status migrate-create deploy-status
 
 BINARY_NAME=loof-api
 MAIN_PATH=./cmd/api
@@ -13,6 +13,12 @@ ENV_FILE ?= .env
 GOOSE = set -a && . ./$(ENV_FILE) && set +a && \
 	goose -dir $(MIGRATIONS_DIR) postgres \
 	"postgresql://$$DB_USER:$$DB_PASS@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=$${DB_SSLMODE:-require}"
+
+# The deploy webhook only exists on the deployed host, so this defaults to prod
+# rather than following ENV_FILE. Point API_URL at localhost:8000 to check from
+# the EC2 box without going through nginx.
+DEPLOY_ENV_FILE ?= .env.prod
+API_URL ?= https://api.letsloof.com
 
 help:
 	@echo "Available targets:"
@@ -30,6 +36,8 @@ help:
 	@echo "  make migrate-status  - Show applied/pending migrations"
 	@echo "  make migrate-create name=add_foo - Scaffold a new migration"
 	@echo "  (append ENV_FILE=.env.prod to target production)"
+	@echo ""
+	@echo "  make deploy-status   - Last deploy reported by the webhook (prod)"
 
 build:
 	@echo "Building $(BINARY_NAME)..."
@@ -71,6 +79,16 @@ migrate-status:
 migrate-create:
 	@test -n "$(name)" || (echo "usage: make migrate-create name=add_foo" && exit 1)
 	goose -dir $(MIGRATIONS_DIR) create $(name) sql
+
+deploy-status:
+	@test -f ./$(DEPLOY_ENV_FILE) || (echo "$(DEPLOY_ENV_FILE) not found" && exit 1)
+	@set -a && . ./$(DEPLOY_ENV_FILE) && set +a && \
+	if [ -z "$$GITHUB_WEBHOOK_SECRET" ]; then \
+		echo "GITHUB_WEBHOOK_SECRET not set in $(DEPLOY_ENV_FILE)"; exit 1; \
+	fi; \
+	curl -sS $(API_URL)/v1/deploy/status \
+		-H "Authorization: Bearer $$GITHUB_WEBHOOK_SECRET" \
+		| { command -v jq >/dev/null 2>&1 && jq . || cat; }
 
 clean:
 	@echo "Cleaning up..."
