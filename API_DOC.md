@@ -43,8 +43,7 @@ Base URL prefix: `/v1`
 ```json
 {
   "success": true,
-  "message": "OTP sent successfully",
-  "otp": "int" // TODO: remove once whatsapp integration is complete
+  "message": "OTP sent successfully"
 }
 ```
 
@@ -59,6 +58,8 @@ Base URL prefix: `/v1`
   "otp": "int"
 }
 ```
+
+> **Note:** OTP verification is currently stubbed — any request with `otp` set to `123456` is accepted. TODO: verify against the generated OTP once whatsapp integration is complete.
 
 **Response Payload**
 ```json

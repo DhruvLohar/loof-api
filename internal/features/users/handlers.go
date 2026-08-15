@@ -1,13 +1,11 @@
 package users
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"loof/internal/database"
 	"loof/internal/shared"
 	"loof/internal/storage"
-	"math/big"
 	"strings"
 	"time"
 
@@ -17,6 +15,10 @@ import (
 )
 
 // --- Auth Handlers ---
+
+// staticOTP is the fixed OTP accepted during development.
+// TODO: replace with a generated OTP once whatsapp integration is complete
+const staticOTP = 123456
 
 func SignUpSignIn(c fiber.Ctx) error {
 	var req SignUpSignInRequest
@@ -61,17 +63,7 @@ func SendOTP(c fiber.Ctx) error {
 		})
 	}
 
-	// Generate secure 6-digit OTP (100000 - 999999)
-	nBig, err := rand.Int(rand.Reader, big.NewInt(900000))
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"success": false,
-			"message": "failed to generate OTP",
-		})
-	}
-	otp := int(nBig.Int64() + 100000)
-
-	if err := UpdateOTP(req.UID, otp); err != nil {
+	if err := UpdateOTP(req.UID, staticOTP); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "failed to save OTP",
@@ -81,7 +73,6 @@ func SendOTP(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "OTP sent successfully",
-		"otp":     otp, // Remove in production!
 	})
 }
 
@@ -111,7 +102,7 @@ func VerifyOTP(c fiber.Ctx) error {
 	}
 
 	// Verify OTP value
-	if user.OTPGenerated == 0 || user.OTPGenerated != req.OTP {
+	if req.OTP != staticOTP {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"message": "Invalid OTP",
