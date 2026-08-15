@@ -23,7 +23,9 @@ APP_PORT=${APP_PORT:-8000}
 ENV_FILE=${ENV_FILE:-$HOST_REPO_DIR/.env.prod}
 SWAP_IMAGE=${SWAP_IMAGE:-docker:cli}
 RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
+# Both Dockerfile FROMs. Kept by the sweep; bump when either FROM moves.
 BUILDER_IMAGE=${BUILDER_IMAGE:-golang:1.26-alpine}
+RUNTIME_IMAGE=${RUNTIME_IMAGE:-alpine:latest}
 
 log() { echo "[deploy.sh] $*"; }
 
@@ -64,8 +66,9 @@ sweep() {
 
 	docker images --no-trunc --format '{{.ID}}|{{.Repository}}:{{.Tag}}' 2>/dev/null |
 		while IFS='|' read -r id ref; do
+			# Every deploy needs these three, so re-pulling them is pure waste.
 			case "$ref" in
-				"$IMAGE_NAME":latest | "$BUILDER_IMAGE") continue ;;
+				"$IMAGE_NAME":latest | "$BUILDER_IMAGE" | "$RUNTIME_IMAGE" | "$SWAP_IMAGE") continue ;;
 			esac
 			case "$in_use" in
 				*"$id"*) continue ;;
@@ -83,7 +86,7 @@ sweep() {
 
 log "sweeping docker before build ($(free_space))"
 sweep
-log "swept, keeping $BUILDER_IMAGE + $IMAGE_NAME ($(free_space))"
+log "swept, keeping $IMAGE_NAME + $BUILDER_IMAGE $RUNTIME_IMAGE $SWAP_IMAGE ($(free_space))"
 
 log "building $IMAGE_NAME:$TAG"
 docker build -t "$IMAGE_NAME:$TAG" -t "$IMAGE_NAME:latest" "$REPO_DIR"
@@ -130,8 +133,9 @@ RUN_CMD="docker run -d \
 	-e APP_PORT=$APP_PORT \
 	$IMAGE_NAME:$TAG"
 
-log "pulling $SWAP_IMAGE for the swap"
-docker pull "$SWAP_IMAGE" >/dev/null
+# Only when missing, so a registry blip can't fail a deploy we could already run.
+# Still before the teardown, so a genuine failure leaves the old container up.
+docker image inspect "$SWAP_IMAGE" >/dev/null 2>&1 || docker pull "$SWAP_IMAGE" >/dev/null
 
 log "handing container swap to helper"
 docker run -d --rm \
