@@ -22,6 +22,7 @@ HOST_PORT=${HOST_PORT:-8000}
 APP_PORT=${APP_PORT:-8000}
 ENV_FILE=${ENV_FILE:-$HOST_REPO_DIR/.env.prod}
 SWAP_IMAGE=${SWAP_IMAGE:-docker:cli}
+RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
 
 log() { echo "[deploy.sh] $*"; }
 
@@ -46,6 +47,31 @@ git clean -fd
 TAG=$(git rev-parse --short HEAD)
 log "building $IMAGE_NAME:$TAG"
 docker build -t "$IMAGE_NAME:$TAG" -t "$IMAGE_NAME:latest" "$REPO_DIR"
+
+# Migrate after the build proves the new code compiles, but before the swap, so
+# the incoming container never boots against an un-migrated schema. set -eu
+# aborts the deploy on failure, which leaves the old container serving.
+if [ "$RUN_MIGRATIONS" = "1" ] && [ -d "$REPO_DIR/migrations" ]; then
+	missing=
+	for v in DB_USER DB_PASS DB_HOST DB_PORT DB_NAME; do
+		eval "val=\${$v:-}"
+		[ -n "$val" ] || missing="$missing $v"
+	done
+	if [ -n "$missing" ]; then
+		log "ERROR: migrations need these unset vars in $ENV_FILE:$missing"
+		exit 1
+	fi
+
+	# Same vars the app builds its DSN from. A literal @ # / or ? in DB_PASS
+	# corrupts this URL, so that password must be percent-encoded in .env.prod.
+	DSN="postgresql://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=${DB_SSLMODE:-require}"
+
+	log "applying migrations"
+	goose -dir "$REPO_DIR/migrations" postgres "$DSN" up
+	log "migrations up to date"
+else
+	log "skipping migrations"
+fi
 
 # Build succeeded, so the new image is safe to run. Everything below happens in
 # a detached helper because it kills the container this script lives in.

@@ -11,6 +11,10 @@ COPY . .
 # Point specifically to the cmd/api directory containing main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/api
 
+# deploy.sh runs migrations before swapping containers, so goose ships in the
+# runtime image. Pinned so a deploy can't pick up a breaking release on its own.
+RUN CGO_ENABLED=0 GOOS=linux go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
+
 # --- Stage 2: Final Runtime ---
 FROM alpine:latest
 
@@ -23,6 +27,7 @@ WORKDIR /root/
 # Copy the compiled binary from the builder stage
 COPY --from=builder /app/server .
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /go/bin/goose /usr/local/bin/goose
 
 RUN chmod +x ./scripts/*.sh
 

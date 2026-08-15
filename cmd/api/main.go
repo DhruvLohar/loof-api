@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"loof/internal/config"
 	"loof/internal/database"
 	"loof/internal/features/admins"
 	"loof/internal/features/deploy"
@@ -28,6 +29,8 @@ func main() {
 		AllowOrigins: []string{
 			"http://127.0.0.1:3000",
 			"http://localhost:3000",
+			"https://letsloof.com",
+			"https://*.letsloof.com",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
@@ -43,7 +46,12 @@ func main() {
 		deploy.RegisterDeployRoutes,
 	)
 
-	err := app.Listen(":8000")
+	port := config.GetEnv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+
+	err := app.Listen(":" + port)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
