@@ -2,6 +2,7 @@ package users
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"loof/internal/database"
 	"loof/internal/shared"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 )
 
@@ -18,6 +20,9 @@ import (
 // staticOTP is the fixed OTP accepted during development.
 // TODO: replace with a generated OTP once whatsapp integration is complete
 const staticOTP = 123456
+
+// MaxCoverImages is the most cover images a profile update may set at once.
+const MaxCoverImages = 6
 
 func SignUpSignIn(c fiber.Ctx) error {
 	var req SignUpSignInRequest
@@ -59,6 +64,13 @@ func SendOTP(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
 			"message": "id is required",
+		})
+	}
+
+	if _, err := GetUser(req.ID); err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"message": "user not found",
 		})
 	}
 
@@ -142,6 +154,14 @@ func VerifyOTP(c fiber.Ctx) error {
 // --- Profile Handlers ---
 
 func ValidateUsername(c fiber.Ctx) error {
+	authUserID, err := shared.GetAuthenticatedUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "unauthorized",
+		})
+	}
+
 	var req ValidateUsernameRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -158,8 +178,17 @@ func ValidateUsername(c fiber.Ctx) error {
 		})
 	}
 
+	if username != strings.ToLower(username) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "username must be lowercase",
+		})
+	}
+
 	var count int64
-	if err := database.DB.Db.Model(&User{}).Where("username = ?", username).Count(&count).Error; err != nil {
+	if err := database.DB.Db.Model(&User{}).
+		Where("username = ? AND id <> ?", username, authUserID).
+		Count(&count).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "failed to validate username",
@@ -276,6 +305,12 @@ func UpdateProfile(c fiber.Ctx) error {
 	}
 
 	if username := strings.TrimSpace(c.FormValue("username")); username != "" {
+		if username != strings.ToLower(username) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "username must be lowercase",
+			})
+		}
 		var count int64
 		if err := database.DB.Db.Model(&User{}).
 			Where("username = ? AND id <> ?", username, authUserID).
@@ -337,6 +372,12 @@ func UpdateProfile(c fiber.Ctx) error {
 		}
 
 		if files := form.File["cover_images"]; len(files) > 0 {
+			if len(files) > MaxCoverImages {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"success": false,
+					"message": fmt.Sprintf("cover_images accepts at most %d images", MaxCoverImages),
+				})
+			}
 			coverImageURLs := make([]string, 0, len(files))
 			for _, fileHeader := range files {
 				url, err := storage.UploadImage(c.Context(), fileHeader, fmt.Sprintf("users/%d/cover-images", authUserID))
@@ -360,6 +401,13 @@ func UpdateProfile(c fiber.Ctx) error {
 	}
 
 	if err := database.DB.Db.Model(&User{}).Where("id = ?", authUserID).Updates(updates).Error; err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_username_key" {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"success": false,
+				"message": "username already exists",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "failed to update profile",

@@ -10,6 +10,7 @@ import (
 	"loof/internal/features/deploy"
 	"loof/internal/features/users"
 	"loof/internal/shared"
+	"loof/internal/storage"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -23,7 +24,9 @@ func healthCheck(c fiber.Ctx) error {
 func main() {
 	database.ConnectDatabase()
 	log.Println("DB Connected")
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: (users.MaxCoverImages + 1) * storage.MaxImageSize,
+	})
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{

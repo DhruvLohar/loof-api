@@ -106,6 +106,8 @@ Store `access_token` and send it as `Authorization: Bearer <access_token>` on ev
 
 **Auth:** Protected
 
+Usernames must be lowercase; a value containing any uppercase character is rejected with `400`.
+
 **Request Payload**
 ```json
 {
@@ -191,13 +193,13 @@ None
 | Field | Type | Notes |
 |---|---|---|
 | `name` | text | |
-| `username` | text | must be unique |
+| `username` | text | must be unique, lowercase only |
 | `gender` | text | |
 | `dob` | text | `YYYY-MM-DD` |
 | `country` | text | |
 | `interests` | text(s) | repeat the field once per interest (`interests=music&interests=travel`), or send a single JSON array (`["music","travel"]`). `interests[]` is accepted too. Replaces the existing list; send one empty value to clear it |
 | `profile_picture` | file | single image, uploaded to S3 |
-| `cover_images` | file(s) | one or more images; replaces the existing list, uploaded to S3 |
+| `cover_images` | file(s) | one or more images, max 6; replaces the existing list, uploaded to S3 |
 
 **Response Payload**
 ```json
