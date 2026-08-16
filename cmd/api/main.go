@@ -10,7 +10,6 @@ import (
 	"loof/internal/features/deploy"
 	"loof/internal/features/users"
 	"loof/internal/shared"
-	"loof/internal/storage"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -25,7 +24,7 @@ func main() {
 	database.ConnectDatabase()
 	log.Println("DB Connected")
 	app := fiber.New(fiber.Config{
-		BodyLimit: (users.MaxCoverImages + 1) * storage.MaxImageSize,
+		BodyLimit: 50 * 1024 * 1024,
 	})
 
 	app.Use(cors.New(cors.Config{
