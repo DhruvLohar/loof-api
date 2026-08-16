@@ -139,15 +139,19 @@ func VerifyOTP(c fiber.Ctx) error {
 		})
 	}
 
+	response := fiber.Map{
+		"id":           user.ID,
+		"phone_number": user.PhoneNumber,
+		"country_code": user.CountryCode,
+		"access_token": accessToken,
+	}
+
+	response["onboarding_completed"] = user.Username != nil && *user.Username != ""
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "OTP verified successfully",
-		"data": fiber.Map{
-			"id":           user.ID,
-			"phone_number": user.PhoneNumber,
-			"country_code": user.CountryCode,
-			"access_token": accessToken,
-		},
+		"data":    response,
 	})
 }
 
