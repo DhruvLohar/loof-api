@@ -11,8 +11,9 @@ func RegisterUserRoutes(router fiber.Router, protectedMiddleware fiber.Handler) 
 	usersGroup.Post("/verify-otp", VerifyOTP)
 
 	// Profile Routes
-	usersGroup.Post("/validate-username", protectedMiddleware, ValidateUsername)
-	usersGroup.Post("/preferences", protectedMiddleware, UpdatePreferences)
-	usersGroup.Get("/profile", protectedMiddleware, GetProfile)
-	usersGroup.Post("/profile", protectedMiddleware, UpdateProfile)
+	usersGroup.Post("/validate-username", protectedMiddleware, RejectDeletedUser, ValidateUsername)
+	usersGroup.Post("/preferences", protectedMiddleware, RejectDeletedUser, UpdatePreferences)
+	usersGroup.Get("/profile", protectedMiddleware, RejectDeletedUser, GetProfile)
+	usersGroup.Post("/profile", protectedMiddleware, RejectDeletedUser, UpdateProfile)
+	usersGroup.Post("/delete", protectedMiddleware, RejectDeletedUser, DeleteAccount)
 }

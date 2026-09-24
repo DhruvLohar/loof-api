@@ -1,8 +1,11 @@
 package users
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"loof/internal/database"
+	"math/big"
 	"strings"
 	"time"
 
@@ -114,4 +117,48 @@ func UpdateBasicDetails(id uint, updates map[string]any) (*User, error) {
 	}
 
 	return GetUser(id)
+}
+
+// withRandomSuffix appends _<random> to base, truncating base so the result fits maxLen
+func withRandomSuffix(base string, maxLen int) (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", err
+	}
+	suffix := fmt.Sprintf("_%06d", n.Int64())
+	if len(base)+len(suffix) > maxLen {
+		base = base[:maxLen-len(suffix)]
+	}
+	return base + suffix, nil
+}
+
+// SoftDeleteUser frees the unique username and phone number for reuse, deactivates the user and revokes their session
+func SoftDeleteUser(id uint) error {
+	user, err := GetUser(id)
+	if err != nil {
+		return err
+	}
+
+	phone, err := withRandomSuffix(user.PhoneNumber, 20)
+	if err != nil {
+		return err
+	}
+
+	updates := map[string]any{
+		"phone_number":     phone,
+		"is_active":        false,
+		"access_token":     "",
+		"otp_generated":    0,
+		"otp_generated_at": nil,
+		"deleted_at":       time.Now(),
+	}
+	if user.Username != nil {
+		username, err := withRandomSuffix(*user.Username, 30)
+		if err != nil {
+			return err
+		}
+		updates["username"] = username
+	}
+
+	return database.DB.Db.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 }

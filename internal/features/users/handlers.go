@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 // --- Auth Handlers ---
@@ -88,7 +89,7 @@ func SendOTP(c fiber.Ctx) error {
 	}
 
 	user, err := GetUser(req.ID)
-	if err != nil {
+	if err != nil || user.DeletedAt != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"success": false,
 			"message": "user not found",
@@ -143,7 +144,7 @@ func VerifyOTP(c fiber.Ctx) error {
 	}
 
 	user, err := GetUser(req.ID)
-	if err != nil {
+	if err != nil || user.DeletedAt != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"success": false,
 			"message": "user not found",
@@ -499,4 +500,53 @@ func GetProfile(c fiber.Ctx) error {
 		"success": true,
 		"user":    SerializeUserProfile(user),
 	})
+}
+
+// DeleteAccount soft-deletes the authenticated user's account
+func DeleteAccount(c fiber.Ctx) error {
+	authUserID, err := shared.GetAuthenticatedUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "unauthorized",
+		})
+	}
+
+	if err := SoftDeleteUser(authUserID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"success": false,
+				"message": "user not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "failed to delete account",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "account deleted successfully",
+	})
+}
+
+// RejectDeletedUser blocks tokens issued before the account was soft-deleted
+func RejectDeletedUser(c fiber.Ctx) error {
+	authUserID, err := shared.GetAuthenticatedUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "unauthorized",
+		})
+	}
+
+	user, err := GetUser(authUserID)
+	if err != nil || user.DeletedAt != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "unauthorized",
+		})
+	}
+	return c.Next()
 }

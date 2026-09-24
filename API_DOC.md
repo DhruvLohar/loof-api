@@ -226,3 +226,17 @@ None
   }
 }
 ```
+
+### POST `/v1/users/delete`
+
+**Auth:** Protected
+
+Soft-deletes the authenticated user (id taken from the auth token). `username` and `phone_number` get a `_<random number>` suffix so they can be registered again, the account is deactivated and the session is revoked. No request body.
+
+**Response Payload**
+```json
+{
+  "success": true,
+  "message": "account deleted successfully"
+}
+```
