@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"loof/internal/config"
 	"loof/internal/database"
 	"loof/internal/shared"
 	"loof/internal/storage"
@@ -17,9 +16,6 @@ import (
 )
 
 // --- Auth Handlers ---
-
-// staticOTP is the fixed OTP accepted during development.
-const staticOTP = 123456
 
 // MaxCoverImages is the most cover images a profile update may set at once.
 const MaxCoverImages = 6
@@ -51,15 +47,11 @@ func SignUpSignIn(c fiber.Ctx) error {
 
 	// Send OTP via WhatsApp
 	if err := SendWhatsAppOTP(c.Context(), user.CountryCode, user.PhoneNumber, otp); err != nil {
-		if config.GetEnv("APP_ENV") != "production" {
-			fmt.Printf("[Dev Warning] WhatsApp OTP send failed: %v. Falling back to static OTP.\n", err)
-			otp = staticOTP
-		} else {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"success": false,
-				"message": "failed to send OTP via WhatsApp",
-			})
-		}
+		fmt.Printf("WhatsApp OTP send failed: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "failed to send OTP via WhatsApp",
+		})
 	}
 
 	if err := UpdateOTP(user.ID, otp); err != nil {
@@ -113,15 +105,11 @@ func SendOTP(c fiber.Ctx) error {
 
 	// Send OTP via WhatsApp
 	if err := SendWhatsAppOTP(c.Context(), user.CountryCode, user.PhoneNumber, otp); err != nil {
-		if config.GetEnv("APP_ENV") != "production" {
-			fmt.Printf("[Dev Warning] WhatsApp OTP send failed: %v. Falling back to static OTP.\n", err)
-			otp = staticOTP
-		} else {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"success": false,
-				"message": "failed to send OTP via WhatsApp",
-			})
-		}
+		fmt.Printf("WhatsApp OTP send failed: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "failed to send OTP via WhatsApp",
+		})
 	}
 
 	if err := UpdateOTP(req.ID, otp); err != nil {
@@ -168,11 +156,6 @@ func VerifyOTP(c fiber.Ctx) error {
 		if user.OTPGeneratedAt == nil || time.Since(*user.OTPGeneratedAt) < 10*time.Minute {
 			isValid = true
 		}
-	}
-
-	// In non-production, we can also accept staticOTP as fallback
-	if !isValid && config.GetEnv("APP_ENV") != "production" && req.OTP == staticOTP {
-		isValid = true
 	}
 
 	if !isValid {

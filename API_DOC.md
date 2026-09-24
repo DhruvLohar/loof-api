@@ -82,7 +82,7 @@ with status `401`. Tokens are signed with HS256 and expire 24 hours after issue;
 }
 ```
 
-> **Note:** OTP verification is currently stubbed — any request with `otp` set to `123456` is accepted. TODO: verify against the generated OTP once whatsapp integration is complete.
+> **Note:** The OTP is the 6-digit code sent via WhatsApp and is valid for 10 minutes.
 
 **Response Payload**
 ```json

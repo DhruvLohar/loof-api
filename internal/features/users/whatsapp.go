@@ -111,7 +111,7 @@ func SendWhatsAppOTP(ctx context.Context, countryCode, phoneNumber string, otp i
 					Parameters: []WhatsAppParameter{
 						{
 							Type: "text",
-							Text: "Copy code",
+							Text: fmt.Sprintf("%06d", otp),
 						},
 					},
 				},
